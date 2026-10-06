@@ -1,28 +1,21 @@
-name: Fundtiere aktualisieren
+name: Fundtiere aktualisieren (Test, wöchentlich)
 
 on:
   schedule:
-    - cron: "17 7-19 * * *"   # stündlich, ca. 9–20 Uhr Wiener Zeit
-  workflow_dispatch:          # Knopf "Run workflow" zum manuellen Starten
-  push:
-    branches: [main]          # nach eigenen Änderungen sofort neu veröffentlichen
+    - cron: "17 7 * * 1"   # jeden Montag ca. 9:17 Uhr Wiener Zeit
+  workflow_dispatch:        # Knopf "Run workflow" zum manuellen Starten
 
 permissions:
   contents: write
-  pages: write
-  id-token: write
 
 concurrency:
-  group: pages
+  group: fundtiere-update
   cancel-in-progress: false
 
 jobs:
-  update-and-deploy:
+  update:
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    environment:
-      name: github-pages
-      url: ${{ steps.deploy.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -33,10 +26,8 @@ jobs:
           python-version: "3.12"
 
       - name: Fundtiere und Fotos von der Stadt Wien holen
-        id: update
         run: python scripts/update.py
         timeout-minutes: 8
-        continue-on-error: true   # Seite wird trotzdem mit den letzten Daten veröffentlicht
 
       - name: Neue Daten speichern
         run: |
@@ -47,22 +38,7 @@ jobs:
           if git diff --cached --quiet; then
             echo "Keine Änderungen."
           else
-            git commit -m "Fundtiere aktualisiert"
+            git commit -m "Fundtiere aktualisiert (wöchentlich)"
             git pull --rebase -X theirs origin main
             git push
           fi
-
-      - uses: actions/configure-pages@v5
-
-      - uses: actions/upload-pages-artifact@v3
-        with:
-          path: .
-
-      - id: deploy
-        uses: actions/deploy-pages@v4
-
-      - name: Fehler beim Abholen melden
-        if: steps.update.outcome == 'failure' && github.event_name != 'push'
-        run: |
-          echo "::error::Die Daten der Stadt Wien konnten nicht abgeholt werden. Die Seite zeigt weiter die letzten Daten."
-          exit 1
